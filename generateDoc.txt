@@ -23,6 +23,7 @@ import org.apache.poi.hssf.usermodel.HSSFClientAnchor;
 import org.apache.poi.hssf.usermodel.HSSFFont;
 import org.apache.poi.hssf.usermodel.HSSFPatriarch;
 import org.apache.poi.hssf.usermodel.HSSFPicture;
+import org.apache.poi.hssf.usermodel.HSSFPrintSetup;
 import org.apache.poi.hssf.usermodel.HSSFRow;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -456,6 +457,27 @@ public static void setInOutLastDate() throws IOException{
 		netDueBalance=convertNumbertoCommaBracket(netDueBalanceDouble);
 		
 		String moneyAsWords="";
+		if(netDueBalanceDouble>=0.0)
+		{
+			long netDueBalanceLong=(long)netDueBalanceDouble;
+			double afterDecimalPoint=netDueBalanceDouble-netDueBalanceLong;
+			long afterDecimalPointLong=(long)(afterDecimalPoint*100.0);
+			
+			OnlyForMoneyAsWords o=new OnlyForMoneyAsWords();			
+			moneyAsWords="USD "+o.convert(netDueBalanceLong)+" and "+o.convert(afterDecimalPointLong)+" Cents Only";
+		}
+		else
+		{
+			long netDueBalanceLong=(long)(netDueBalanceDouble*(-1.0));			
+			double afterDecimalPoint=netDueBalanceDouble+netDueBalanceLong;
+			afterDecimalPoint*=-1.0;
+			long afterDecimalPointLong=(long)(afterDecimalPoint*100.0);
+			
+			OnlyForMoneyAsWords o=new OnlyForMoneyAsWords();			
+			moneyAsWords="(USD "+o.convert(netDueBalanceLong)+" and "+o.convert(afterDecimalPointLong)+" Cents Only)";
+		}
+		
+		
 //		if(netDueBalanceDouble<99000) moneyAsWords = getMoneyIntoWords(netDueBalanceDouble);
 
 		//-----------------------here starts the table-----------------------------------------------------
@@ -672,7 +694,7 @@ public static void setInOutLastDate() throws IOException{
 		
 
 		
-		String[] carrierList={"SaifTelecom"};
+		String[] carrierList={"Ivoco"};
 		int numberOfCarrier=carrierList.length;
 		
 		for(int i=0;i<numberOfCarrier;i++) {
