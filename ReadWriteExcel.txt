@@ -1026,7 +1026,7 @@ public class ReadWriteExcel {
 			ReadWriteExcel.readXLSXFile();
 			
 			File tempCDRSOA=new File("C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString+"\\CDR_SOA "+carrierName+" "+startDateFinalString+"-"+endDateFinalString+" temp.xls");
-			//tempCDRSOA.delete();
+			tempCDRSOA.delete();
 			
 			outStream.flush();
 			outStream.close();
