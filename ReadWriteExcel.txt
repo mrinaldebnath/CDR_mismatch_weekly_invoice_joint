@@ -1,0 +1,1037 @@
+package com.weeklyInvoice;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.text.DecimalFormat;
+import java.text.Format;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Scanner;
+
+import org.apache.poi.hssf.usermodel.HSSFCell;
+import org.apache.poi.hssf.usermodel.HSSFCellStyle;
+import org.apache.poi.hssf.usermodel.HSSFClientAnchor;
+import org.apache.poi.hssf.usermodel.HSSFFont;
+import org.apache.poi.hssf.usermodel.HSSFPatriarch;
+import org.apache.poi.hssf.usermodel.HSSFPicture;
+import org.apache.poi.hssf.usermodel.HSSFPrintSetup;
+import org.apache.poi.hssf.usermodel.HSSFRow;
+import org.apache.poi.hssf.usermodel.HSSFSheet;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.util.IOUtils;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFClientAnchor;
+import org.apache.poi.xssf.usermodel.XSSFDrawing;
+import org.apache.poi.xssf.usermodel.XSSFPicture;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+public class ReadWriteExcel {
+
+	static FileOutputStream outStream;
+	static InputStream inStream;
+	static InputStream CDR_SOA_Instream;
+	static Map<String, String> dateRateMap;
+	static Map<String, Double> receivedMap;
+	static int discountIvoco;
+	static String carrierName;
+	static String startDateFinalString;
+	static String endDateFinalString;
+	static String startDateLastInvoiceString;
+	static String endDateLastInvoiceString;
+
+	public ReadWriteExcel() {
+		super();
+		ReadWriteExcel.dateRateMap = new HashMap<String, String>();
+		ReadWriteExcel.receivedMap = new HashMap<String, Double>();
+		discountIvoco=0;
+	}
+	
+	public static void setDate() {
+		
+		ReadWriteExcel.dateRateMap = new HashMap<String, String>();
+		ReadWriteExcel.receivedMap = new HashMap<String, Double>();
+		discountIvoco=0;
+			File yearDir = new File("C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice " + carrierName + " (1)\\Invoice "
+					+ carrierName + " 2018");
+
+			File[] listOfYearlyFiles = yearDir.listFiles();
+			int numberInsideYear = listOfYearlyFiles.length;
+			Date tempForLastDate = new Date(117, 11, 31);
+			int tempforLastIndex = 0;
+
+			for (int yearIndex = 0; yearIndex < numberInsideYear; yearIndex++) {
+
+				File fileToCheck = listOfYearlyFiles[yearIndex];
+				String fileName = fileToCheck.getName();
+
+				if (!fileName.equals("TrackDate.txt"))
+					continue;
+
+				String content=null;
+
+				try {
+					content = new String(Files.readAllBytes(Paths.get(fileToCheck.getAbsolutePath())));
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				
+				startDateFinalString=content.substring(0, content.indexOf("-"));
+				endDateFinalString=content.substring(content.indexOf("-")+1);
+			}
+	}
+	
+	public static HSSFCellStyle constructHSSFCellStyle(HSSFWorkbook wb,int borderStyle,boolean bold,short fontHeight)
+	{
+		
+		HorizontalAlignment h = HorizontalAlignment.CENTER;
+		VerticalAlignment v = VerticalAlignment.CENTER;
+		
+		
+		HSSFCellStyle newStyle = wb.createCellStyle();
+		BorderStyle border=null;
+		if(borderStyle==1)border=BorderStyle.THIN;
+		else if(borderStyle==2)border=BorderStyle.MEDIUM;
+		else if(borderStyle==3)border=BorderStyle.THIN;
+		
+		newStyle.setAlignment(h);
+		newStyle.setVerticalAlignment(v);
+		
+		HSSFFont font = wb.createFont();
+		font.setBold(bold);
+		font.setFontHeightInPoints((short) fontHeight);
+		
+		newStyle.setFont(font);
+		
+		if(borderStyle!=0)
+		{
+			newStyle.setBorderBottom(border);
+			newStyle.setBorderLeft(border);
+			newStyle.setBorderRight(border);
+			newStyle.setBorderTop(border);
+		}
+		
+		return newStyle;
+		
+	}
+
+	public static void readXLSXFile() throws IOException {
+		
+		discountIvoco=1;
+
+		int MILLIS_IN_DAY = 1000 * 60 * 60 * 24;
+
+		HorizontalAlignment h = HorizontalAlignment.CENTER;
+		VerticalAlignment v = VerticalAlignment.CENTER;
+
+		HSSFWorkbook wb_old = new HSSFWorkbook(CDR_SOA_Instream);
+		HSSFSheet sheet_SOA = wb_old.getSheetAt(1);
+
+		XSSFWorkbook wbx = new XSSFWorkbook(inStream);
+		XSSFSheet sheetx = wbx.getSheetAt(0);
+
+		String sheetName = "CDR";// name of sheet
+
+		HSSFWorkbook wb = new HSSFWorkbook();
+		HSSFSheet sheet = wb.createSheet(sheetName);
+		HSSFFont font = wb.createFont();
+
+		HSSFCellStyle newStyleMediumBorder = wb.createCellStyle();
+		BorderStyle newBorder = BorderStyle.MEDIUM;
+		newStyleMediumBorder.setAlignment(h);
+		newStyleMediumBorder.setVerticalAlignment(v);
+		HSSFFont fontForSmall = wb.createFont();
+		fontForSmall.setBold(true);
+		fontForSmall.setFontHeightInPoints((short) 12);
+		newStyleMediumBorder.setFont(fontForSmall);
+		newStyleMediumBorder.setBorderBottom(newBorder);
+		newStyleMediumBorder.setBorderLeft(newBorder);
+		newStyleMediumBorder.setBorderRight(newBorder);
+		newStyleMediumBorder.setBorderTop(newBorder);
+
+		HSSFCellStyle newStyleSmallBorder = wb.createCellStyle();
+		newBorder = BorderStyle.THIN;
+		newStyleSmallBorder.setAlignment(h);
+		newStyleSmallBorder.setVerticalAlignment(v);
+		HSSFFont fontForSmallBorder = wb.createFont();
+		fontForSmallBorder.setBold(false);
+		fontForSmallBorder.setFontHeightInPoints((short) 10);
+		newStyleSmallBorder.setFont(fontForSmallBorder);
+		newStyleSmallBorder.setBorderBottom(newBorder);
+		newStyleSmallBorder.setBorderLeft(newBorder);
+		newStyleSmallBorder.setBorderRight(newBorder);
+		newStyleSmallBorder.setBorderTop(newBorder);
+
+		HSSFCellStyle newStyleUpperBorder = wb.createCellStyle();
+		newBorder = BorderStyle.MEDIUM;
+		newStyleUpperBorder.setAlignment(h);
+		newStyleUpperBorder.setVerticalAlignment(v);
+		HSSFFont fontForUpperBorder = wb.createFont();
+		fontForUpperBorder.setBold(false);
+		fontForUpperBorder.setFontHeightInPoints((short) 10);
+		newStyleUpperBorder.setFont(fontForUpperBorder);
+		newStyleUpperBorder.setBorderTop(newBorder);
+
+		HSSFCellStyle newStyleSetFont = wb.createCellStyle();
+		HSSFFont onlyBold = wb.createFont();
+		onlyBold.setBold(true);
+		short height = 20;
+		onlyBold.setFontHeightInPoints(height);
+		newStyleSetFont.setAlignment(h);
+		newStyleSetFont.setVerticalAlignment(v);
+		newStyleSetFont.setFont(onlyBold);
+
+		HSSFCellStyle newStyleMediumBold = wb.createCellStyle();
+		HSSFFont mediumBold = wb.createFont();
+		mediumBold.setBold(true);
+		height = 18;
+		mediumBold.setFontHeightInPoints(height);
+		newStyleMediumBold.setAlignment(h);
+		newStyleMediumBold.setVerticalAlignment(v);
+		newStyleMediumBold.setFont(mediumBold);
+
+		HSSFCellStyle newStyleOnlyCenter = wb.createCellStyle();
+		HSSFFont noBold = wb.createFont();
+		noBold.setBold(false);
+		noBold.setFontHeightInPoints((short) 12);
+		newStyleOnlyCenter.setFont(noBold);
+		newStyleOnlyCenter.setAlignment(h);
+		newStyleOnlyCenter.setVerticalAlignment(v);
+
+		XSSFRow rowx;
+		XSSFCell cellx;
+
+		HSSFRow row;
+		HSSFCell cell;
+
+		int rowCount = sheetx.getPhysicalNumberOfRows();
+
+		for (int r = 0; r < 8; r++) {
+			row = sheet.createRow(r);
+			for (int c = 0; c < 7; c++) {
+				cell = row.createCell(c);
+			}
+		}
+		
+		//------------------display logo on CDR------------------------------------
+		
+		/* Read input PNG / JPG Image into FileInputStream Object*/
+        InputStream my_banner_imageCDR = new FileInputStream("logo.PNG");
+        /* Convert picture to be added into a byte array */
+        byte[] bytesCDR = IOUtils.toByteArray(my_banner_imageCDR);
+        /* Add Picture to Workbook, Specify picture type as PNG and Get an Index */
+        int my_picture_idCDR = wb.addPicture(bytesCDR, Workbook.PICTURE_TYPE_PNG);
+        /* Close the InputStream. We are ready to attach the image to workbook now */
+        my_banner_imageCDR.close();                
+        /* Create the drawing container */
+      /* Create the drawing container */
+      HSSFPatriarch drawingCDR = sheet.createDrawingPatriarch();
+      /* Create an anchor point */
+      HSSFClientAnchor my_anchorCDR = new HSSFClientAnchor();
+      /* Define top left corner, and we can resize picture suitable from there */
+      my_anchorCDR.setCol1(3);
+      my_anchorCDR.setRow1(0);  
+      my_anchorCDR.setCol2(3);
+      my_anchorCDR.setRow2(2);
+      /* Invoke createPicture and pass the anchor point and ID */
+      HSSFPicture  my_pictureCDR = drawingCDR.createPicture(my_anchorCDR, my_picture_idCDR);
+      /* Call resize method, which resizes the image */
+      my_pictureCDR.resize(1.0,1.0);
+		
+		//-----------------------------------------------------------------------------------------------
+		
+		
+
+		sheet.addMergedRegion(new CellRangeAddress(2, 3, 0, 6));
+		row = sheet.getRow(2);
+		cell = row.getCell(0);
+		cell.setCellStyle(constructHSSFCellStyle(wb,0,true,(short) 14));
+		cell.setCellValue("CDR of International Incoming Call from "+carrierName+" Pte. Ltd.");
+
+		sheet.addMergedRegion(new CellRangeAddress(4, 4, 0, 5));
+		row = sheet.getRow(4);
+		cell = row.getCell(0);
+		cell.setCellStyle(newStyleOnlyCenter);
+		cell.setCellValue("Routed by Platinum Communications Ltd.");
+
+		sheet.addMergedRegion(new CellRangeAddress(5, 5, 0, 5));
+		row = sheet.getRow(5);
+		cell = row.getCell(0);
+		cell.setCellStyle(newStyleOnlyCenter);
+		cell.setCellValue("For the period of "+startDateFinalString+"-"+endDateFinalString);
+
+		row = sheet.createRow(6);
+		for (int c = 0; c < 7; c++) {
+			cell = row.createCell(c);
+		}
+		sheet.addMergedRegion(new CellRangeAddress(6, 6, 0, 6));
+
+		row = sheet.createRow(7);
+		for (int c = 0; c < 7; c++) {
+			cell = row.createCell(c);
+		}
+
+		String[] stringsAtRow7 = { "Si No", "From", "Duration", "International Carrier", "Paid Minutes", "Rates(USD)",
+				"Total Amount(USD)" };
+
+		row = sheet.getRow(7);
+		for (int c = 0; c < 7; c++) {
+			cell = row.getCell(c);
+
+			cell.setCellStyle(newStyleMediumBorder);
+			cell.setCellValue(stringsAtRow7[c]);
+		}
+
+		List<String> carrierCostString = new ArrayList<String>();
+		double totalCarrierDuration=0.0;
+		double totalTempUSD=0.0;
+		
+		DecimalFormat decimalFormat = new DecimalFormat("#,##0.00");
+		
+		for (int r = 0; r < rowCount - 2; r++) {
+
+			rowx = sheetx.getRow(r + 1);
+			row = sheet.createRow(r + 8);
+
+			int columnCount = rowx.getPhysicalNumberOfCells();
+			// iterating c number of columns
+			for (int c = 0; c < columnCount; c++) {
+				cell = row.createCell(c);
+			}
+
+			cell = row.getCell(0);
+			cell.setCellStyle(newStyleSmallBorder);
+			cell.setCellValue(r + 1);
+
+			cell = row.getCell(2);
+			cell.setCellStyle(newStyleSmallBorder);
+			cell.setCellValue("24 Hrs");
+
+			cellx = rowx.getCell(0);
+			cellx = (XSSFCell) cellx;
+			cell = row.getCell(1);
+			cell.setCellStyle(newStyleSmallBorder);
+
+			DataFormatter formatter = new DataFormatter(); // creating formatter using the default locale
+			String cellValue = cellx.getStringCellValue();
+			String dateValue = cellValue;
+			cell.setCellValue(cellValue);
+
+			cellx = rowx.getCell(1);
+			cellx = (XSSFCell) cellx;
+			cell = row.getCell(3);
+			cell.setCellStyle(newStyleSmallBorder);
+
+			formatter = new DataFormatter(); // creating formatter using the default locale
+			cellValue = formatter.formatCellValue(cellx);
+			cell.setCellValue(cellValue);
+
+			cellx = rowx.getCell(7);
+			cellx = (XSSFCell) cellx;
+			cell = row.getCell(4);
+			cell.setCellStyle(newStyleSmallBorder);
+
+			formatter = new DataFormatter(); // creating formatter using the default locale
+			cellValue = formatter.formatCellValue(cellx);
+			totalCarrierDuration += Double.parseDouble(cellValue.replaceAll(",", ""));
+			double dailyTempUSD=Double.parseDouble(cellValue.replaceAll(",", ""))*0.0240;
+			totalTempUSD+=dailyTempUSD;
+			
+			cell.setCellValue(cellValue);
+
+			if (dateValue != null) {
+				cell = row.getCell(5);
+				cell.setCellStyle(newStyleSmallBorder);
+				if(carrierName.equals("Ivoco") && discountIvoco==1) cell.setCellValue("0.0240");
+				else cell.setCellValue(dateRateMap.get(dateValue).toString());
+				
+			}
+
+			cellx = rowx.getCell(11);
+			cellx = (XSSFCell) cellx;
+			cell = row.getCell(6);
+			cell.setCellStyle(newStyleSmallBorder);
+
+			formatter = new DataFormatter(); // creating formatter using the default locale
+			
+			if(carrierName.equals("Ivoco") && discountIvoco==1)
+				{
+					cellValue=Double.toString(dailyTempUSD);
+				}
+			
+			else cellValue = formatter.formatCellValue(cellx);
+			
+			carrierCostString.add(cellValue);
+			if (r < rowCount - 2)
+				cell.setCellValue(Math.round((Double.parseDouble(cellValue)) * 100.0) / 100.0);
+
+		}
+
+		double totalCarrierCost = 0;
+		int totalRow = carrierCostString.size() - 1;
+		for (int costIndex = 0; costIndex <= totalRow; costIndex++) {
+			totalCarrierCost += Double.parseDouble(carrierCostString.get(costIndex));
+		}
+
+		for (int c = 0; c < 7; c++) {
+			int maxNumCharacters = 0;
+			int numberOfRows = sheet.getLastRowNum() - sheet.getFirstRowNum();
+			for (int r = 7; r < numberOfRows; r++) {
+				row = sheet.getRow(r);
+				cell = row.getCell(c);
+
+				DataFormatter formatter = new DataFormatter(); // creating formatter using the default locale
+
+				String cellValue = formatter.formatCellValue(cell);
+				maxNumCharacters = Math.max(maxNumCharacters, cellValue.length());
+			}
+
+			int width = ((int) (maxNumCharacters * 1.4)) * 256;
+			sheet.setColumnWidth(c, width);
+		}
+		
+		row = sheet.createRow(8+rowCount-2);
+		sheet.addMergedRegion(new CellRangeAddress(8+rowCount-2, 8+rowCount-2, 0, 3));
+		row = sheet.getRow(8+rowCount-2);
+		for (int c = 0; c < 7; c++) {
+			cell = row.createCell(c);
+		}
+		
+
+		cell = row.getCell(0);
+		cell.setCellStyle(newStyleMediumBorder);
+		cell.setCellValue("Total");
+		
+		cell = row.getCell(4);
+		cell.setCellStyle(newStyleMediumBorder);
+		
+		String cellValueCDR = decimalFormat.format(totalCarrierDuration);
+		cell.setCellValue(cellValueCDR);
+
+		for (int i = 1; i < 6; i++) {
+			if (i == 5)
+				continue;
+			cell = row.getCell(i);
+			cell.setCellStyle(newStyleMediumBorder);
+		}
+
+		cell = row.getCell(6);
+		cell.setCellStyle(newStyleMediumBorder);
+		cellValueCDR = decimalFormat.format(totalCarrierCost);
+		cell.setCellValue(cellValueCDR);
+
+		for (int r = 21; r < 30; r++) {
+			row = sheet.createRow(r);
+			for (int c = 0; c < 7; c++) {
+				row.createCell(c);
+			}
+		}
+
+		sheet.addMergedRegion(new CellRangeAddress(21, 21, 2, 3));
+		sheet.addMergedRegion(new CellRangeAddress(21, 21, 5, 6));
+		sheet.addMergedRegion(new CellRangeAddress(22, 22, 2, 3));
+		sheet.addMergedRegion(new CellRangeAddress(22, 22, 5, 6));
+		sheet.addMergedRegion(new CellRangeAddress(27, 27, 3, 4));
+		sheet.addMergedRegion(new CellRangeAddress(28, 28, 3, 4));
+
+		row = sheet.getRow(22);
+		cell = row.getCell(2);
+		cell.setCellStyle(newStyleUpperBorder);
+		cell.setCellValue("Authorized by (Head Billing. Dept)");
+
+		cell = row.getCell(3);
+		cell.setCellStyle(newStyleUpperBorder);
+
+		cell = row.getCell(5);
+		cell.setCellStyle(newStyleUpperBorder);
+		cell.setCellValue("Checked by Billing Dept");
+
+		cell = row.getCell(6);
+		cell.setCellStyle(newStyleUpperBorder);
+
+		row = sheet.getRow(28);
+		cell = row.getCell(3);
+		cell.setCellStyle(newStyleUpperBorder);
+		cell.setCellValue("Generated by Mrinal Deb Nath");
+
+		cell = row.getCell(4);
+		cell.setCellStyle(newStyleUpperBorder);
+		
+		sheet.getPrintSetup().setLandscape(true);
+		sheet.getPrintSetup().setPaperSize(HSSFPrintSetup.A4_PAPERSIZE); 
+
+		wb.write(outStream);
+		outStream.flush();
+		outStream.close();
+
+		
+		
+		// =============================== here starts the code for SOA ================================================  
+		
+		
+		
+		outStream = new FileOutputStream(
+				"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString+"\\CDR_SOA "+carrierName+" "+startDateFinalString+"-"+endDateFinalString+".xls");
+		int fCell = 0;
+		int lCell = 0;
+		int fRow = 0;
+		int lRow = 0;
+		HSSFSheet mySheet = null;
+		HSSFRow myRow = null;
+		HSSFCell myCell = null;
+
+		mySheet = wb.createSheet(sheet_SOA.getSheetName());
+
+		for (int r = 0; r < 4; r++) {
+			row = mySheet.createRow(r);
+			for (int c = 0; c < 10; c++) {
+				cell = row.createCell(c);
+			}
+			mySheet.addMergedRegion(new CellRangeAddress(r, r, 0, 5));
+		}
+		
+		
+		
+		//------------------display logo on SOA------------------------------------
+		
+				mySheet.addMergedRegion(new CellRangeAddress(2, 2, 6, 7));
+				
+				/* Read input PNG / JPG Image into FileInputStream Object*/
+		        InputStream my_banner_imageSOA = new FileInputStream("logo.PNG");
+		        /* Convert picture to be added into a byte array */
+		        byte[] bytesSOA = IOUtils.toByteArray(my_banner_imageSOA);
+		        /* Add Picture to Workbook, Specify picture type as PNG and Get an Index */
+		        int my_picture_idSOA = wb.addPicture(bytesSOA, Workbook.PICTURE_TYPE_PNG);
+		        /* Close the InputStream. We are ready to attach the image to workbook now */
+		        my_banner_imageSOA.close();                
+		        /* Create the drawing container */
+		        HSSFPatriarch drawing_SOA = mySheet.createDrawingPatriarch();
+		        /* Create an anchor point */
+		        HSSFClientAnchor my_anchorSOA = new HSSFClientAnchor();
+		        /* Define top left corner, and we can resize picture suitable from there */
+		        my_anchorSOA.setCol1(6);
+		        my_anchorSOA.setRow1(2);           
+		        /* Invoke createPicture and pass the anchor point and ID */
+		        
+		        HSSFPicture  my_pictureSOA = drawing_SOA.createPicture(my_anchorSOA, my_picture_idSOA);
+		        /* Call resize method, which resizes the image */
+		        my_pictureSOA.resize();
+		        
+				
+		//-----------------------------------------------------------------------------------------------
+				
+		
+
+		row = mySheet.getRow(1);
+		cell = row.getCell(0);
+		cell.setCellStyle(newStyleSetFont);
+		cell.setCellValue("Platinum Communications Ltd.");
+
+		row = mySheet.getRow(2);
+		cell = row.getCell(0);
+		cell.setCellStyle(newStyleMediumBold);
+		cell.setCellValue("SOA of "+carrierName+" Pte. Ltd.");
+
+		fRow = sheet_SOA.getFirstRowNum();
+		lRow = sheet_SOA.getLastRowNum();
+		
+		String previousString=null;
+		String previousInvoiceInfo=null;
+	
+		
+		for (int iRow = 4; iRow < lRow; iRow++) {
+			row = sheet_SOA.getRow(iRow);
+//			if(iRow==lRow-1)System.out.println(row.getCell(1).getStringCellValue());
+			myRow = mySheet.createRow(iRow);
+			if (row != null && !(iRow==29 && carrierName.equals("PMB"))) {
+				fCell = row.getFirstCellNum();
+				lCell = row.getLastCellNum();
+
+				for (int iCell = fCell; iCell < lCell; iCell++) {
+				
+					cell = row.getCell(iCell);
+					
+					myCell = myRow.createCell(iCell);
+					if(iRow==4 || (iRow==29 && carrierName.equals("PMB")))myCell.setCellStyle(newStyleMediumBorder);
+					else myCell.setCellStyle(newStyleSmallBorder);
+					if (cell != null) {
+
+						if (iRow > 4 && iCell == 0) {
+							myCell.setCellValue(iRow - 4);
+							continue;
+						}
+
+						DataFormatter formatter = new DataFormatter();
+						String cellValue ="0";
+						cellValue=formatter.formatCellValue(cell);
+						myCell.setCellValue(cellValue);
+						if(!(iRow==4 || (iRow==29 && carrierName.equals("PMB"))))
+						{
+							if(iCell==1)previousInvoiceInfo=cellValue;
+							if(iCell==5)previousString=cellValue;
+						}
+					}
+
+				}
+			}
+		}
+		
+		if(carrierName.equals("PMB"))
+		{
+			String[] stringsAtRow29 = { "Si. No", "Invoice No.", "Period", "Invoice Amount USD. ", "Received Amount USD. ", "Balance Amount USD. " };
+			
+	row = mySheet.getRow(29);
+	for (int c = 0; c < 6; c++) {
+		cell = row.createCell(c);
+
+		cell.setCellStyle(newStyleMediumBorder);
+		cell.setCellValue(stringsAtRow29[c]);
+	}	
+	
+	
+		}
+		
+		int receivedRow = 0;
+		
+		DataFormatter formatter = new DataFormatter();
+		
+		if(receivedMap.containsKey("1"))
+		{
+			for (Map.Entry<String, Double> entry : receivedMap.entrySet()) {
+				double previousDouble=0;
+				previousString = previousString.replaceAll(",", "");
+				if(previousString.indexOf("(")!=-1) previousString= "-"+previousString.substring(1, previousString.length()-1);
+				if (!previousString.equals(""))
+					previousDouble = Double.parseDouble(previousString);
+				
+				previousDouble-=entry.getValue();
+				
+				previousString = decimalFormat.format(previousDouble);
+				if(previousDouble<0)previousString="("+previousString.substring(1)+")";
+				
+				String[] columnValuesOfReceivedRow= {Integer.toString(myRow.getRowNum()+1-4),"Credit Note","","",Double.toString(entry.getValue()),previousString};
+				
+				myRow = mySheet.createRow(myRow.getRowNum()+1);
+				
+				for (int iCell = fCell; iCell <6; iCell++) {
+					myCell = myRow.createCell(iCell);
+					myCell.setCellStyle(newStyleSmallBorder);
+					myCell.setCellValue(columnValuesOfReceivedRow[iCell]);
+				}
+				receivedRow++;
+			}
+		}
+		
+		else if(!receivedMap.containsKey("0"))
+		{
+			for (Map.Entry<String, Double> entry : receivedMap.entrySet()) {
+				double previousDouble=0;
+				previousString = previousString.replaceAll(",", "");
+				if(previousString.indexOf("(")!=-1) previousString= "-"+previousString.substring(1, previousString.length()-1);
+				if (!previousString.equals(""))
+					previousDouble = Double.parseDouble(previousString);
+				
+				previousDouble-=entry.getValue();
+				
+				previousString = decimalFormat.format(previousDouble);
+				if(previousDouble<0)previousString="("+previousString.substring(1)+")";
+				
+				String[] columnValuesOfReceivedRow= {Integer.toString(myRow.getRowNum()+1-4),"Received",entry.getKey(),"",Double.toString(entry.getValue()),previousString};
+				
+				myRow = mySheet.createRow(myRow.getRowNum()+1);
+				
+				for (int iCell = fCell; iCell <6; iCell++) {
+					myCell = myRow.createCell(iCell);
+					myCell.setCellStyle(newStyleSmallBorder);
+					myCell.setCellValue(columnValuesOfReceivedRow[iCell]);
+				}
+				receivedRow++;
+			}
+			
+		}
+		
+		
+		//--------------------code for discount---------------------------------------------------------
+		
+//		if(carrierName.equals("Ivoco") && discountIvoco==1)
+//		{
+//			double previousDouble=0;
+//			previousString = previousString.replaceAll(",", "");
+//			if(previousString.indexOf("(")!=-1) previousString= "-"+previousString.substring(1, previousString.length()-1);
+//			if (!previousString.equals(""))
+//				previousDouble = Double.parseDouble(previousString);
+//			double discountDollar=totalCarrierCost-24390.0;
+//			double discountMinute=discountDollar/0.025;
+//			previousDouble-=(discountMinute*0.001);
+//			previousString = decimalFormat.format(previousDouble);
+//			String discountValueToString=decimalFormat.format(discountMinute*0.001);
+//			if(previousDouble<0)previousString="("+previousString.substring(1)+")";
+//			
+//			String[] columnValuesOfReceivedRow= {Integer.toString(myRow.getRowNum()+1-4),"Discount","","",discountValueToString,previousString};
+//			
+//			myRow = mySheet.createRow(myRow.getRowNum()+1);
+//			
+//			for (int iCell = fCell; iCell <6; iCell++) {
+//				myCell = myRow.createCell(iCell);
+//				if(iCell==1)myCell.setCellStyle(newStyleMediumBorder);
+//				else myCell.setCellStyle(newStyleSmallBorder);
+//				myCell.setCellValue(columnValuesOfReceivedRow[iCell]);
+//			}
+//			receivedRow++;
+//			
+//		}
+		
+		
+		//---------------------------code for discount---------------------------------------------
+		
+		Double totalInvoice = 0.0;
+		Double totalReceived = 0.0;
+
+		row = sheet_SOA.getRow(lRow);
+		myRow = mySheet.createRow(mySheet.getLastRowNum()+1);
+
+			for (int iCell = fCell; iCell < lCell; iCell++) {
+				cell = row.getCell(iCell);
+				myCell = myRow.createCell(iCell);
+				myCell.setCellStyle(newStyleSmallBorder);
+
+					if (iCell == 0) {
+						myCell.setCellValue(myRow.getRowNum() - 4);
+						continue;
+					}
+			}
+		
+		
+
+		myCell = myRow.getCell(1);
+		formatter = new DataFormatter();
+		String invoiceNumberString = previousInvoiceInfo.substring(previousInvoiceInfo.lastIndexOf("/") + 1);
+		int newInvoiceNumber = Integer.parseInt(invoiceNumberString) + 1;
+		myCell.setCellValue(previousInvoiceInfo.substring(0, previousInvoiceInfo.lastIndexOf("/") + 1) + newInvoiceNumber);
+		
+		myCell = myRow.getCell(2);
+		myCell.setCellValue(startDateFinalString+" to "+endDateFinalString);
+		
+		myCell = myRow.getCell(3);
+		decimalFormat = new DecimalFormat("#,##0.00");
+		String cellValue = decimalFormat.format(totalCarrierCost);
+		myCell.setCellValue(cellValue);
+		
+		myCell = myRow.getCell(5);
+		double previousDouble=0;
+		previousString = previousString.replaceAll(",", "");
+		if(previousString.indexOf("(")!=-1) previousString= "-"+previousString.substring(1, previousString.length()-1);
+		if (!previousString.equals(""))
+			previousDouble = Double.parseDouble(previousString);
+		
+		previousDouble+=totalCarrierCost;
+		cellValue = decimalFormat.format(previousDouble);
+		if(previousDouble<0)cellValue="("+cellValue.substring(1)+")";
+		myCell.setCellValue(cellValue);
+
+		for (int iRow = 5; iRow <= mySheet.getLastRowNum(); iRow++) {
+			if (row != null && (iRow==29 && carrierName.equals("PMB")))continue;
+			myRow = mySheet.getRow(iRow);
+
+			myCell = myRow.getCell(3);
+			
+				formatter = new DataFormatter();
+				cellValue = formatter.formatCellValue(myCell);
+				cellValue = cellValue.replaceAll(",", "");
+				if (!cellValue.equals(""))
+					totalInvoice += Double.parseDouble(cellValue);
+			}
+			
+		for (int iRow = 5; iRow <= mySheet.getLastRowNum(); iRow++) {
+			if (row != null && (iRow==29 && carrierName.equals("PMB")))continue;
+			myRow = mySheet.getRow(iRow);
+
+			myCell = myRow.getCell(4);
+			
+				formatter = new DataFormatter();
+				cellValue = formatter.formatCellValue(myCell);
+				cellValue = cellValue.replaceAll(",", "");
+				if (!cellValue.equals(""))
+					totalReceived += Double.parseDouble(cellValue);
+			}
+
+		
+		
+	
+		
+		myRow = mySheet.createRow(mySheet.getLastRowNum()+1);
+	
+			
+			for(int c=0;c<10;c++) {
+				myRow.createCell(c);
+				
+			}
+			
+			mySheet.addMergedRegion(new CellRangeAddress(mySheet.getLastRowNum(), mySheet.getLastRowNum(), 0, 2));
+			
+			myCell = myRow.getCell(0);
+			myCell.setCellStyle(newStyleMediumBorder);
+			myCell.setCellValue("Total");
+			
+			myCell = myRow.getCell(1);
+			myCell.setCellStyle(newStyleMediumBorder);
+			myCell = myRow.getCell(2);
+			myCell.setCellStyle(newStyleMediumBorder);
+
+		myCell = myRow.getCell(3);
+		myCell.setCellStyle(newStyleMediumBorder);
+		decimalFormat = new DecimalFormat("#,##0.00");
+		myCell.setCellValue(decimalFormat.format(totalInvoice));
+
+		myCell = myRow.getCell(4);
+		myCell.setCellStyle(newStyleMediumBorder);
+		decimalFormat = new DecimalFormat("#,##0.00");
+		myCell.setCellValue(decimalFormat.format(totalReceived));
+		
+		for (int c=0;c<10;c++)
+		{
+			mySheet.autoSizeColumn(c);
+		}
+		
+		
+	
+		wb.write(outStream);
+
+	}
+
+	public static void storeReceivedList(Map<String, Object> carrierToReceivedMap) {
+		
+		if(carrierToReceivedMap.containsKey(carrierName))receivedMap=(Map<String, Double>) (carrierToReceivedMap.get(carrierName));
+		else receivedMap.put("0", 0.00);
+	}
+
+	public static void storeRateList() throws Exception {
+
+		InputStream inStream = new FileInputStream(
+				"C:\\Users\\Omnia\\Google Drive\\Invoice\\Rate Change Sheet -2018.xlsx");
+
+		XSSFWorkbook wbx = new XSSFWorkbook(inStream);
+
+		XSSFSheet sheetx = wbx.getSheetAt(wbx.getNumberOfSheets()-1);
+
+		XSSFRow row = sheetx.getRow(3);
+		XSSFCell cell;
+		int carrierColumn = 0;
+		int totalColumns = row.getPhysicalNumberOfCells();
+		
+		for (int i = 2; i < totalColumns+1; i++) {
+			
+			cell = row.getCell(i);
+			DataFormatter formatter = new DataFormatter(); // creating formatter using the default locale
+			String cellValue = formatter.formatCellValue(cell);
+			if (cellValue.startsWith(carrierName)) {
+				carrierColumn = i;
+				break;
+			}
+		}
+		
+		
+		for (int i = 4; i < 11; i++) {
+			row = sheetx.getRow(i);
+			cell = row.getCell(carrierColumn);
+			DataFormatter formatter = new DataFormatter(); // creating formatter using the default locale
+			String rateValue = formatter.formatCellValue(cell);
+
+			cell = row.getCell(1);
+			// String dateValue = formatter.formatCellValue(cell);
+			Format f = new SimpleDateFormat("dd/MM/yyyy");
+			String dateValue = f.format(cell.getDateCellValue());
+
+			dateRateMap.put(dateValue, rateValue);
+			
+		}
+		
+		
+	}
+	
+	public static void setInOutLastDate() throws IOException{
+		
+		File currentFolder=new File("C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString);
+		File[] listOfcurrentFolder = currentFolder.listFiles();
+		int numberInsidecurrentFolder = listOfcurrentFolder.length;
+		
+		for (int currentFolderIndex = 0; currentFolderIndex < numberInsidecurrentFolder; currentFolderIndex++) {
+
+			File fileToCheck = listOfcurrentFolder[currentFolderIndex];
+			String fileName = fileToCheck.getName();
+
+			if (fileName.endsWith("x")) {
+				
+				inStream = new FileInputStream(
+						"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString+"\\"+fileName);
+				
+			}
+		}
+		
+		outStream = new FileOutputStream(
+				"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString+"\\CDR_SOA "+carrierName+" "+startDateFinalString+"-"+endDateFinalString+".xls");
+		
+		
+		CDR_SOA_Instream = new FileInputStream(
+				"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString+"\\CDR_SOA "+carrierName+" "+startDateFinalString+"-"+endDateFinalString+" temp.xls");
+		
+		
+		
+	}
+	
+	public static void main(String[] args) throws IOException {
+		
+		
+		
+		// String[] listOfCarrierName = { "Big Leap", "Carrier-1", "Inaani", "INS",
+				// "Ivoco", "MagikTel", "Mainberg","SaifTelecom"
+				// "PMB" };
+		
+		String[] carrierList= {"Ivoco", "Carrier-1",  "INS","SaifTelecom"};
+		int numberOfCarrier=carrierList.length;
+		
+		Map<String, Object> carrierToReceivedMap=new HashMap<String, Object>();
+		
+		//---------------------Here to store all carrier's receivedlists---------------------------//
+		
+		
+		double tk,dollarRate,dollar;
+		Map<String, Double> receivedMap;
+		
+		//--------------------------------Repeat this part for each carrier----------------------------------------------------------------
+		
+		
+		receivedMap = new HashMap<String, Double>();
+		
+		tk = 120000;
+		dollarRate = 83;
+		dollar = tk / dollarRate;
+		dollar = Math.round(dollar * 100.0) / 100.0;
+		
+		receivedMap.put("20.08.2018",dollar);
+		
+		tk = 60000;
+		dollarRate = 83;
+		dollar = tk / dollarRate;
+		dollar = Math.round(dollar * 100.0) / 100.0;
+		
+		receivedMap.put("25.08.2018 ",dollar);
+		
+		tk = 60000;
+		dollarRate = 83;
+		dollar = tk / dollarRate;
+		dollar = Math.round(dollar * 100.0) / 100.0;
+		
+		receivedMap.put("26.08.2018",dollar);
+	
+		carrierToReceivedMap.put("Carrier-1", receivedMap);
+		
+		
+		//-----------------------------------------------------------------------------------------------------
+		
+		receivedMap = new HashMap<String, Double>();
+
+		tk = 50000;
+		dollarRate = 1;
+		dollar = tk / dollarRate;
+		dollar = Math.round(dollar * 100.0) / 100.0;
+		
+		receivedMap.put("26.08.2018",dollar);
+		
+		
+		carrierToReceivedMap.put("Ivoco", receivedMap);
+		
+		//-----------------------------------------------------------------------------------------------
+		
+		receivedMap = new HashMap<String, Double>();
+		
+		tk = 150000;
+		dollarRate = 83;
+		dollar = tk / dollarRate;
+		dollar = Math.round(dollar * 100.0) / 100.0;
+		
+		receivedMap.put("16.08.2018",dollar);
+		
+		tk = 200000;
+		dollarRate = 83;
+		dollar = tk / dollarRate;
+		dollar = Math.round(dollar * 100.0) / 100.0;
+		
+		receivedMap.put("18.08.2018 ",dollar);
+		
+		tk = 300000;
+		dollarRate = 83;
+		dollar = tk / dollarRate;
+		dollar = Math.round(dollar * 100.0) / 100.0;
+		
+		receivedMap.put("0",dollar);
+		
+		carrierToReceivedMap.put("SaifTelecom", receivedMap);
+		
+		//-----------------------------------------------------------------------------------------------
+		
+		receivedMap = new HashMap<String, Double>();
+				
+		
+		tk = 1000000;
+		dollarRate = 83;
+		dollar = tk / dollarRate;
+		dollar = Math.round(dollar * 100.0) / 100.0;
+		
+		receivedMap.put("0",dollar);
+		
+		
+		carrierToReceivedMap.put("INS", receivedMap);
+		
+		//------------------------------------------------------------------------------------------------------
+		
+		for(int i=0;i<numberOfCarrier;i++) {
+			carrierName=carrierList[i];
+			discountIvoco=0;
+			
+			System.out.println(carrierName);
+			
+			ReadWriteExcel.setDate();
+			ReadWriteExcel.storeReceivedList(carrierToReceivedMap);
+			ReadWriteExcel.setInOutLastDate();
+			
+			try {
+				ReadWriteExcel.storeRateList();
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			ReadWriteExcel.readXLSXFile();
+			
+			File tempCDRSOA=new File("C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString+"\\CDR_SOA "+carrierName+" "+startDateFinalString+"-"+endDateFinalString+" temp.xls");
+			tempCDRSOA.delete();
+			
+			outStream.flush();
+			outStream.close();
+		}
+
+	}
+
+}
