@@ -10,12 +10,18 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.Format;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 
 import org.apache.poi.hssf.usermodel.HSSFCell;
 import org.apache.poi.hssf.usermodel.HSSFCellStyle;
@@ -44,7 +50,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import pl.allegro.finance.tradukisto.MoneyConverters;
 
 public class GenerateDoc {
-	
+
 	static String carrierName;
 	static int discountIvoco;
 	static String startDateFinalString;
@@ -53,311 +59,376 @@ public class GenerateDoc {
 	static InputStream inStream;
 	static InputStream CDR_SOA_Instream;
 	static Map<String, String> addressMap;
-	
-	
-	
-	
-public static void setDate() {
-		
-	addressMap = new HashMap<String, String>();
-		discountIvoco=0;
-			File yearDir = new File("C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice " + carrierName + " (1)\\Invoice "
-					+ carrierName + " 2018");
+	static TreeSet<Integer> breakPoints;
+	static Map<String, String> dateRateMap;
 
-			File[] listOfYearlyFiles = yearDir.listFiles();
-			int numberInsideYear = listOfYearlyFiles.length;
-			Date tempForLastDate = new Date(117, 11, 31);
-			int tempforLastIndex = 0;
+	public static void setDate() {
+		dateRateMap = new HashMap<String, String>();
 
-			for (int yearIndex = 0; yearIndex < numberInsideYear; yearIndex++) {
+		breakPoints = new TreeSet<Integer>();
 
-				File fileToCheck = listOfYearlyFiles[yearIndex];
-				String fileName = fileToCheck.getName();
+		addressMap = new HashMap<String, String>();
+		discountIvoco = 0;
+		File yearDir = new File("C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice " + carrierName + " (1)\\Invoice "
+				+ carrierName + " 2018");
 
-				if (!fileName.equals("TrackDate.txt"))
-					continue;
+		File[] listOfYearlyFiles = yearDir.listFiles();
+		int numberInsideYear = listOfYearlyFiles.length;
+		Date tempForLastDate = new Date(117, 11, 31);
+		int tempforLastIndex = 0;
 
-				String content=null;
+		for (int yearIndex = 0; yearIndex < numberInsideYear; yearIndex++) {
 
-				try {
-					content = new String(Files.readAllBytes(Paths.get(fileToCheck.getAbsolutePath())));
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				
-				startDateFinalString=content.substring(0, content.indexOf("-"));
-				endDateFinalString=content.substring(content.indexOf("-")+1);
+			File fileToCheck = listOfYearlyFiles[yearIndex];
+			String fileName = fileToCheck.getName();
+
+			if (!fileName.equals("TrackDate.txt"))
+				continue;
+
+			String content = null;
+
+			try {
+				content = new String(Files.readAllBytes(Paths.get(fileToCheck.getAbsolutePath())));
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
-	}
 
-
-public static void setInOutLastDate() throws IOException{
-	
-	addressMap.put("Carrier-1", "Apartment - 1C, 1st floor,\t" + 
-			"House-7, Road-5, Block-I,\t" + 
-			"Banani, Dhaka-1213\t");
-	
-	
-	File currentFolder=new File("C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString);
-	File[] listOfcurrentFolder = currentFolder.listFiles();
-	int numberInsidecurrentFolder = listOfcurrentFolder.length;
-	
-	for (int currentFolderIndex = 0; currentFolderIndex < numberInsidecurrentFolder; currentFolderIndex++) {
-
-		File fileToCheck = listOfcurrentFolder[currentFolderIndex];
-		String fileName = fileToCheck.getName();
-
-		if (fileName.endsWith("x")) {
-			
-			inStream = new FileInputStream(
-					"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString+"\\"+fileName);
-			
+			startDateFinalString = content.substring(0, content.indexOf("-"));
+			endDateFinalString = content.substring(content.indexOf("-") + 1);
 		}
 	}
-	
-	outStream = new FileOutputStream(
-			"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString+"\\Invoice "+carrierName+" "+startDateFinalString+"-"+endDateFinalString+".xls");
-	
-	
-	CDR_SOA_Instream = new FileInputStream(
-			"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice "+carrierName+" (1)\\Invoice "+carrierName+" 2018\\"+carrierName+" "+startDateFinalString+"-"+endDateFinalString+"\\CDR_SOA "+carrierName+" "+startDateFinalString+"-"+endDateFinalString+".xls");
-	
-	
-	
-}
 
+	public static void storeBreakPoints() throws Exception {
 
-	public static HSSFCellStyle constructHSSFCellStyle(HSSFWorkbook wb,int borderStyle,boolean bold,short fontHeight)
-	{
-//		fontHeight+=1;
+		InputStream inStream = new FileInputStream(
+				"C:\\Users\\Omnia\\Google Drive\\Invoice\\Rate Change Sheet -2018.xlsx");
+
+		XSSFWorkbook wbx = new XSSFWorkbook(inStream);
+
+		XSSFSheet sheetx = wbx.getSheetAt(wbx.getNumberOfSheets() - 1);
+
+		XSSFRow row = sheetx.getRow(3);
+		XSSFCell cell;
+		int carrierColumn = 0;
+		int totalColumns = row.getPhysicalNumberOfCells();
+
+		for (int i = 2; i < totalColumns + 1; i++) {
+
+			cell = row.getCell(i);
+			DataFormatter formatter = new DataFormatter(); // creating formatter using the default locale
+			String cellValue = formatter.formatCellValue(cell);
+			if (cellValue.startsWith(carrierName)) {
+				carrierColumn = i;
+				break;
+			}
+		}
+
+		String previousRate = "";
+
+		for (int i = 4; i < 11; i++) {
+			row = sheetx.getRow(i);
+			cell = row.getCell(carrierColumn);
+			DataFormatter formatter = new DataFormatter(); // creating formatter using the default locale
+			String rateValue = formatter.formatCellValue(cell);
+
+			if (!previousRate.equals(rateValue)) {
+				if (previousRate.equals(""))
+					previousRate = rateValue;
+
+				else {
+					breakPoints.add(i - 4);
+					previousRate = rateValue;
+				}
+			}
+
+		}
+
+	}
+
+	public static void setInOutLastDate() throws IOException {
+
+		addressMap.put("Carrier-1",
+				"Apartment - 1C, 1st floor,\t" + "House-7, Road-5, Block-I,\t" + "Banani, Dhaka-1213\t");
+
+		File currentFolder = new File(
+				"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice " + carrierName + " (1)\\Invoice " + carrierName
+						+ " 2018\\" + carrierName + " " + startDateFinalString + "-" + endDateFinalString);
+		File[] listOfcurrentFolder = currentFolder.listFiles();
+		int numberInsidecurrentFolder = listOfcurrentFolder.length;
+
+		for (int currentFolderIndex = 0; currentFolderIndex < numberInsidecurrentFolder; currentFolderIndex++) {
+
+			File fileToCheck = listOfcurrentFolder[currentFolderIndex];
+			String fileName = fileToCheck.getName();
+
+			if (fileName.endsWith("x")) {
+
+				inStream = new FileInputStream("C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice " + carrierName
+						+ " (1)\\Invoice " + carrierName + " 2018\\" + carrierName + " " + startDateFinalString + "-"
+						+ endDateFinalString + "\\" + fileName);
+
+			}
+		}
+
+		outStream = new FileOutputStream(
+				"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice " + carrierName + " (1)\\Invoice " + carrierName
+						+ " 2018\\" + carrierName + " " + startDateFinalString + "-" + endDateFinalString + "\\Invoice "
+						+ carrierName + " " + startDateFinalString + "-" + endDateFinalString + ".xls");
+
+		CDR_SOA_Instream = new FileInputStream(
+				"C:\\Users\\Omnia\\Google Drive\\Invoice\\Invoice " + carrierName + " (1)\\Invoice " + carrierName
+						+ " 2018\\" + carrierName + " " + startDateFinalString + "-" + endDateFinalString + "\\CDR_SOA "
+						+ carrierName + " " + startDateFinalString + "-" + endDateFinalString + ".xls");
+
+	}
+
+	public static HSSFCellStyle constructHSSFCellStyle(HSSFWorkbook wb, int borderStyle, boolean bold,
+			short fontHeight) {
+		// fontHeight+=1;
 		HorizontalAlignment h = HorizontalAlignment.CENTER;
 		VerticalAlignment v = VerticalAlignment.CENTER;
-		
-		
+
 		HSSFCellStyle newStyle = wb.createCellStyle();
-		BorderStyle border=null;
-		if(borderStyle==1)border=BorderStyle.THIN;
-		else if(borderStyle==2)border=BorderStyle.MEDIUM;
-		else if(borderStyle==3)border=BorderStyle.THICK;
-		
+		BorderStyle border = null;
+		if (borderStyle == 1)
+			border = BorderStyle.THIN;
+		else if (borderStyle == 2)
+			border = BorderStyle.MEDIUM;
+		else if (borderStyle == 3)
+			border = BorderStyle.THICK;
+
 		newStyle.setAlignment(h);
 		newStyle.setVerticalAlignment(v);
-		
+
 		HSSFFont font = wb.createFont();
 		font.setBold(bold);
 		font.setFontHeightInPoints((short) fontHeight);
-		
+
 		newStyle.setFont(font);
 		newStyle.setWrapText(true);
-		
-		if(borderStyle!=0)
-		{
+
+		if (borderStyle != 0) {
 			newStyle.setBorderBottom(border);
 			newStyle.setBorderLeft(border);
 			newStyle.setBorderRight(border);
 			newStyle.setBorderTop(border);
 		}
-		
+
 		return newStyle;
-		
+
 	}
-	
-	public static HSSFCellStyle constructHSSFCellStyleForSignature(HSSFWorkbook wb,int borderStyle,boolean bold,short fontHeight)
-	{
-//		fontHeight+=1;
+
+	public static HSSFCellStyle constructHSSFCellStyleForSignature(HSSFWorkbook wb, int borderStyle, boolean bold,
+			short fontHeight) {
+		// fontHeight+=1;
 		HorizontalAlignment h = HorizontalAlignment.CENTER;
 		VerticalAlignment v = VerticalAlignment.CENTER;
-		
-		
+
 		HSSFCellStyle newStyle = wb.createCellStyle();
-		BorderStyle border=null;
-		if(borderStyle==1)border=BorderStyle.THIN;
-		else if(borderStyle==2)border=BorderStyle.MEDIUM;
-		else if(borderStyle==3)border=BorderStyle.THICK;
-		
+		BorderStyle border = null;
+		if (borderStyle == 1)
+			border = BorderStyle.THIN;
+		else if (borderStyle == 2)
+			border = BorderStyle.MEDIUM;
+		else if (borderStyle == 3)
+			border = BorderStyle.THICK;
+
 		newStyle.setAlignment(h);
 		newStyle.setVerticalAlignment(v);
-		
+
 		HSSFFont font = wb.createFont();
 		font.setBold(bold);
 		font.setFontHeightInPoints((short) fontHeight);
-		
+
 		newStyle.setFont(font);
 		newStyle.setWrapText(true);
-		
-		if(borderStyle!=0)
-		{
+
+		if (borderStyle != 0) {
 			newStyle.setBorderBottom(border);
 		}
-		
+
 		return newStyle;
-		
+
 	}
-	
-	public static HSSFCellStyle constructHSSFCellStyleLeft(HSSFWorkbook wb,int borderStyle,boolean bold,short fontHeight)
-	{
-//		fontHeight+=1;
+
+	public static HSSFCellStyle constructHSSFCellStyleLeft(HSSFWorkbook wb, int borderStyle, boolean bold,
+			short fontHeight) {
+		// fontHeight+=1;
 		HorizontalAlignment h = HorizontalAlignment.LEFT;
 		VerticalAlignment v = VerticalAlignment.CENTER;
-		
-		
+
 		HSSFCellStyle newStyle = wb.createCellStyle();
-		BorderStyle border=null;
-		if(borderStyle==1)border=BorderStyle.THIN;
-		else if(borderStyle==2)border=BorderStyle.MEDIUM;
-		else if(borderStyle==3)border=BorderStyle.THICK;
-		
+		BorderStyle border = null;
+		if (borderStyle == 1)
+			border = BorderStyle.THIN;
+		else if (borderStyle == 2)
+			border = BorderStyle.MEDIUM;
+		else if (borderStyle == 3)
+			border = BorderStyle.THICK;
+
 		newStyle.setAlignment(h);
 		newStyle.setVerticalAlignment(v);
-		
+
 		HSSFFont font = wb.createFont();
 		font.setBold(bold);
 		font.setFontHeightInPoints((short) fontHeight);
-		
+
 		newStyle.setFont(font);
 		newStyle.setWrapText(true);
-		
-		if(borderStyle!=0)
-		{
+
+		if (borderStyle != 0) {
 			newStyle.setBorderBottom(border);
 			newStyle.setBorderLeft(border);
 			newStyle.setBorderRight(border);
 			newStyle.setBorderTop(border);
 		}
-		
+
 		return newStyle;
-		
+
 	}
-	
-	public static HSSFCellStyle constructHSSFCellStyleRight(HSSFWorkbook wb,int borderStyle,boolean bold,short fontHeight)
-	{
-//		fontHeight+=1;
+
+	public static HSSFCellStyle constructHSSFCellStyleRight(HSSFWorkbook wb, int borderStyle, boolean bold,
+			short fontHeight) {
+		// fontHeight+=1;
 		HorizontalAlignment h = HorizontalAlignment.RIGHT;
 		VerticalAlignment v = VerticalAlignment.CENTER;
-		
-		
+
 		HSSFCellStyle newStyle = wb.createCellStyle();
-		BorderStyle border=null;
-		if(borderStyle==1)border=BorderStyle.THIN;
-		else if(borderStyle==2)border=BorderStyle.MEDIUM;
-		else if(borderStyle==3)border=BorderStyle.THICK;
-		
+		BorderStyle border = null;
+		if (borderStyle == 1)
+			border = BorderStyle.THIN;
+		else if (borderStyle == 2)
+			border = BorderStyle.MEDIUM;
+		else if (borderStyle == 3)
+			border = BorderStyle.THICK;
+
 		newStyle.setAlignment(h);
 		newStyle.setVerticalAlignment(v);
-		
+
 		HSSFFont font = wb.createFont();
 		font.setBold(bold);
 		font.setFontHeightInPoints((short) fontHeight);
-		
+
 		newStyle.setFont(font);
 		newStyle.setWrapText(true);
-		
-		if(borderStyle!=0)
-		{
+
+		if (borderStyle != 0) {
 			newStyle.setBorderBottom(border);
 			newStyle.setBorderLeft(border);
 			newStyle.setBorderRight(border);
 			newStyle.setBorderTop(border);
 		}
-		
+
 		return newStyle;
-		
+
 	}
-	
-	public static void setCellStyle(HSSFSheet sheet,int row1,int row2,int col1,int col2,HSSFWorkbook wb,int borderStyle,boolean bold,int fontHeight)
-	{
+
+	public static void setCellStyle(HSSFSheet sheet, int row1, int row2, int col1, int col2, HSSFWorkbook wb,
+			int borderStyle, boolean bold, int fontHeight) {
 		HSSFRow row;
 		HSSFCell cell;
-		if(row1!=row2||col1!=col2)sheet.addMergedRegion(new CellRangeAddress(row1,row2,col1,col2));
-		for(int irow=row1;irow<=row2;irow++)
-		{
+		if (row1 != row2 || col1 != col2)
+			sheet.addMergedRegion(new CellRangeAddress(row1, row2, col1, col2));
+		for (int irow = row1; irow <= row2; irow++) {
 			row = sheet.getRow(irow);
-			for(int icol=col1;icol<=col2;icol++)
-			{
+			for (int icol = col1; icol <= col2; icol++) {
 				cell = row.getCell(icol);
-				cell.setCellStyle(constructHSSFCellStyle(wb,borderStyle,bold,(short) fontHeight));
-			
+				cell.setCellStyle(constructHSSFCellStyle(wb, borderStyle, bold, (short) fontHeight));
+
 			}
 		}
 	}
-	
-	public static void setCellStyleForSignature(HSSFSheet sheet,int row1,int row2,int col1,int col2,HSSFWorkbook wb,int borderStyle,boolean bold,int fontHeight)
-	{
+
+	public static void setCellStyleForSignature(HSSFSheet sheet, int row1, int row2, int col1, int col2,
+			HSSFWorkbook wb, int borderStyle, boolean bold, int fontHeight) {
 		HSSFRow row;
 		HSSFCell cell;
-		if(row1!=row2||col1!=col2)sheet.addMergedRegion(new CellRangeAddress(row1,row2,col1,col2));
-		for(int irow=row1;irow<=row2;irow++)
-		{
+		if (row1 != row2 || col1 != col2)
+			sheet.addMergedRegion(new CellRangeAddress(row1, row2, col1, col2));
+		for (int irow = row1; irow <= row2; irow++) {
 			row = sheet.getRow(irow);
-			for(int icol=col1;icol<=col2;icol++)
-			{
+			for (int icol = col1; icol <= col2; icol++) {
 				cell = row.getCell(icol);
-				cell.setCellStyle(constructHSSFCellStyleForSignature(wb,borderStyle,bold,(short) fontHeight));
-			
+				cell.setCellStyle(constructHSSFCellStyleForSignature(wb, borderStyle, bold, (short) fontHeight));
+
 			}
 		}
 	}
-	
-	public static void setCellStyleLeft(HSSFSheet sheet,int row1,int row2,int col1,int col2,HSSFWorkbook wb,int borderStyle,boolean bold,int fontHeight)
-	{
+
+	public static void setCellStyleLeft(HSSFSheet sheet, int row1, int row2, int col1, int col2, HSSFWorkbook wb,
+			int borderStyle, boolean bold, int fontHeight) {
 		HSSFRow row;
 		HSSFCell cell;
-		if(row1!=row2||col1!=col2)sheet.addMergedRegion(new CellRangeAddress(row1,row2,col1,col2));
-		for(int irow=row1;irow<=row2;irow++)
-		{
+		if (row1 != row2 || col1 != col2)
+			sheet.addMergedRegion(new CellRangeAddress(row1, row2, col1, col2));
+		for (int irow = row1; irow <= row2; irow++) {
 			row = sheet.getRow(irow);
-			for(int icol=col1;icol<=col2;icol++)
-			{
+			for (int icol = col1; icol <= col2; icol++) {
 				cell = row.getCell(icol);
-				cell.setCellStyle(constructHSSFCellStyleLeft(wb,borderStyle,bold,(short) fontHeight));
-			
+				cell.setCellStyle(constructHSSFCellStyleLeft(wb, borderStyle, bold, (short) fontHeight));
+
 			}
 		}
 	}
-	
-	public static void setCellStyleRight(HSSFSheet sheet,int row1,int row2,int col1,int col2,HSSFWorkbook wb,int borderStyle,boolean bold,int fontHeight)
-	{
+
+	public static void setCellStyleRight(HSSFSheet sheet, int row1, int row2, int col1, int col2, HSSFWorkbook wb,
+			int borderStyle, boolean bold, int fontHeight) {
 		HSSFRow row;
 		HSSFCell cell;
-		if(row1!=row2||col1!=col2)sheet.addMergedRegion(new CellRangeAddress(row1,row2,col1,col2));
-		for(int irow=row1;irow<=row2;irow++)
-		{
+		if (row1 != row2 || col1 != col2)
+			sheet.addMergedRegion(new CellRangeAddress(row1, row2, col1, col2));
+		for (int irow = row1; irow <= row2; irow++) {
 			row = sheet.getRow(irow);
-			for(int icol=col1;icol<=col2;icol++)
-			{
+			for (int icol = col1; icol <= col2; icol++) {
 				cell = row.getCell(icol);
-				cell.setCellStyle(constructHSSFCellStyleRight(wb,borderStyle,bold,(short) fontHeight));
-			
+				cell.setCellStyle(constructHSSFCellStyleRight(wb, borderStyle, bold, (short) fontHeight));
+
 			}
 		}
 	}
-	
-	public static double convertCommaandBrackettoNumber(String commaBracket)
-	{
-		double result=0.0;
+
+	public static double convertCommaandBrackettoNumber(String commaBracket) {
+		double result = 0.0;
 		commaBracket = commaBracket.replaceAll(",", "");
-		if(commaBracket.indexOf("(")!=-1) commaBracket= "-"+commaBracket.substring(1, commaBracket.length()-1);
+		if (commaBracket.indexOf("(") != -1)
+			commaBracket = "-" + commaBracket.substring(1, commaBracket.length() - 1);
 		if (!commaBracket.equals(""))
 			result = Double.parseDouble(commaBracket);
-				
+
 		return result;
 	}
-	
-	public static String convertNumbertoCommaBracket(double number)
-	{
+
+	public static String convertNumbertoCommaBracket(double number) {
 		String result;
 		DecimalFormat decimalFormat = new DecimalFormat("#,##0.00");
 		result = decimalFormat.format(number);
-		if(number<0)result="("+result.substring(1)+")";
+		if (number < 0)
+			result = "(" + result.substring(1) + ")";
 		return result;
 	}
 
-	
+	public static void splitTable() {
+		String[] startDateStrings = startDateFinalString.split(" ");
+		String[] endDateStrings = endDateFinalString.split(" ");
+		String startMonth = startDateStrings[1];
+		String endMonth = endDateStrings[1];
+
+		if (!startMonth.equals(endMonth)) {
+			Date startDate = new Date();
+			Date endDate = new Date();
+			try {
+				startDate = new SimpleDateFormat("dd MMMM yyyy").parse(startDateFinalString);
+				endDate = new SimpleDateFormat("dd MMMM yyyy").parse(endDateFinalString);
+			} catch (ParseException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
+
 	public static void readXLSXFile() throws IOException {
-	
-		
-		
+
 		discountIvoco = 1;
 
 		int MILLIS_IN_DAY = 1000 * 60 * 60 * 24;
@@ -365,12 +436,12 @@ public static void setInOutLastDate() throws IOException{
 		HSSFWorkbook wb_old = new HSSFWorkbook(CDR_SOA_Instream);
 		HSSFSheet sheet_CDR = wb_old.getSheetAt(0);
 		HSSFSheet sheet_SOA = wb_old.getSheetAt(1);
-		
+
 		XSSFWorkbook portal = new XSSFWorkbook(inStream);
 		XSSFSheet sheet_Portal = portal.getSheetAt(0);
 
-//		XSSFWorkbook wbx = new XSSFWorkbook(inStream);
-//		XSSFSheet sheetx = wbx.getSheetAt(0);
+		// XSSFWorkbook wbx = new XSSFWorkbook(inStream);
+		// XSSFSheet sheetx = wbx.getSheetAt(0);
 
 		String sheetName = "Invoice";// name of sheet
 
@@ -379,12 +450,11 @@ public static void setInOutLastDate() throws IOException{
 
 		HSSFRow row;
 		HSSFCell cell;
-		
+
 		HSSFRow rowIn;
 		HSSFCell cellIn;
-		
-		
-//		int rowCount = sheetx.getPhysicalNumberOfRows();
+
+		// int rowCount = sheetx.getPhysicalNumberOfRows();
 
 		for (int r = 0; r < 80; r++) {
 			row = sheet.createRow(r);
@@ -419,423 +489,572 @@ public static void setInOutLastDate() throws IOException{
 
 		// -----------------------------------------------------------------------------------------------
 
-		int currRow=2;
-		
+		int currRow = 2;
+
 		row = sheet.getRow(currRow);
 		cell = row.getCell(5);
-		setCellStyle(sheet,currRow, currRow+1, 5, 6,wb,3,true,(short) 10);
+		setCellStyle(sheet, currRow, currRow + 1, 5, 6, wb, 3, true, (short) 10);
 		cell.setCellValue("Invoice");
-		
-		currRow+=4;
-		
-		
+
+		currRow += 4;
+
 		row = sheet.getRow(currRow);
 		cell = row.getCell(0);
-		setCellStyle(sheet,currRow, currRow, 0, 1,wb,1,true,(short) 8);
+		setCellStyle(sheet, currRow, currRow, 0, 1, wb, 1, true, (short) 8);
 		cell.setCellValue("Invoice To:");
-		
+
 		cell = row.getCell(7);
 		cell.setCellValue("Invoice No:");
 		setCellStyle(sheet, currRow, currRow, 7, 8, wb, 1, true, 8);
 
-		
 		sheet.addMergedRegion(new CellRangeAddress(currRow, currRow, 9, 12));
 		cell = row.getCell(9);
-		cell.setCellStyle(constructHSSFCellStyleLeft(wb,0,false,(short) 10));
-		rowIn=sheet_SOA.getRow(sheet_SOA.getLastRowNum()-1);
-		cellIn=rowIn.getCell(1);		
+		cell.setCellStyle(constructHSSFCellStyleLeft(wb, 0, false, (short) 10));
+		rowIn = sheet_SOA.getRow(sheet_SOA.getLastRowNum() - 1);
+		cellIn = rowIn.getCell(1);
 		DataFormatter formatter = new DataFormatter(); // creating formatter using the default locale
 		String cellValue = formatter.formatCellValue(cellIn);
 		cell.setCellValue(cellValue);
-		
+
 		currRow++;
-		
+
 		row = sheet.getRow(currRow);
 		cell = row.getCell(0);
-		setCellStyle(sheet,currRow, currRow, 0, 1,wb,1,false,(short) 10);
+		setCellStyle(sheet, currRow, currRow, 0, 1, wb, 1, false, (short) 10);
 		cell.setCellValue("Client:");
-		
+
 		sheet.addMergedRegion(new CellRangeAddress(currRow, currRow, 2, 5));
 		row = sheet.getRow(currRow);
 		cell = row.getCell(2);
-		cell.setCellValue("   "+carrierName);
-		if(carrierName.equals("SaifTelecom"))cell.setCellValue("   SaifTelecommunication");
-		
+		cell.setCellValue("   " + carrierName);
+		if (carrierName.equals("SaifTelecom"))
+			cell.setCellValue("   SaifTelecommunication");
+
 		cell = row.getCell(7);
-		setCellStyle(sheet,currRow, currRow, 7, 8,wb,1,true,8);
+		setCellStyle(sheet, currRow, currRow, 7, 8, wb, 1, true, 8);
 		cell.setCellValue("Invoice Date:");
-		
-		setCellStyleLeft(sheet,currRow, currRow, 9, 12,wb,0,false,(short) 10);
+
+		setCellStyleLeft(sheet, currRow, currRow, 9, 12, wb, 0, false, (short) 10);
 		cell = row.getCell(9);
-		cell.setCellStyle(constructHSSFCellStyleLeft(wb,0,false,(short) 10));
-		
+		cell.setCellStyle(constructHSSFCellStyleLeft(wb, 0, false, (short) 10));
+
 		SimpleDateFormat dateFormat = new SimpleDateFormat("dd MMMM yyyy");
 		Date today = new Date();
 		String todayString = dateFormat.format(today.getTime());
 		cell.setCellValue(todayString);
-		
+
 		currRow++;
-		
-		setCellStyle(sheet,currRow,currRow, 7, 8,wb,1,true, 8);
+
+		setCellStyle(sheet, currRow, currRow, 7, 8, wb, 1, true, 8);
 		row = sheet.getRow(currRow);
 		cell = row.getCell(7);
 		cell.setCellValue("Invoice Period:");
-		
-		setCellStyleLeft(sheet,currRow,currRow, 9, 12,wb,0,true, 10);
+
+		setCellStyleLeft(sheet, currRow, currRow, 9, 12, wb, 0, true, 10);
 		cell = row.getCell(9);
-		cell.setCellValue(startDateFinalString+"-"+endDateFinalString);
-		
-		currRow+=2;
-		
-		if (carrierName.equals("Carrier-1")	) {
+		cell.setCellValue(startDateFinalString + "-" + endDateFinalString);
+
+		currRow += 2;
+
+		if (carrierName.equals("Carrier-1")) {
 			row = sheet.getRow(currRow);
 			cell = row.getCell(0);
 			cell.setCellStyle(constructHSSFCellStyle(wb, 1, false, (short) 10));
 			cell.setCellValue("Address:");
-			setCellStyle(sheet, currRow, currRow+2, 1, 5, wb, 1, false, 10);
+			setCellStyle(sheet, currRow, currRow + 2, 1, 5, wb, 1, false, 10);
 			cell = row.getCell(1);
 			cell.setCellValue(addressMap.get(carrierName));
 		}
-	    setCellStyle(sheet,currRow, currRow, 7, 9,wb,2,true,8);
+		setCellStyle(sheet, currRow, currRow, 7, 9, wb, 2, true, 8);
 		row = sheet.getRow(currRow);
 		cell = row.getCell(7);
 		cell.setCellValue("Mode of Payment");
 		currRow++;
-		
+
 		sheet.addMergedRegion(new CellRangeAddress(currRow, currRow, 7, 9));
-		sheet.addMergedRegion(new CellRangeAddress(currRow+1, currRow+1, 7, 9));
-		
+		sheet.addMergedRegion(new CellRangeAddress(currRow + 1, currRow + 1, 7, 9));
+
 		row = sheet.getRow(currRow);
 		cell = row.getCell(7);
 		cell.setCellValue("Currency: USD");
-		currRow+=2;
-		
-		setCellStyle(sheet,currRow,currRow, 0, 2,wb,1,true, 10);
+		currRow += 2;
+
+		setCellStyle(sheet, currRow, currRow, 0, 2, wb, 1, true, 10);
 		row = sheet.getRow(currRow);
 		cell = row.getCell(0);
 		cell.setCellValue("Invoice Summary:");
-		
-		currRow+=2;
-		
-		int numberOfRows=sheet_Portal.getLastRowNum()-1;
-		String totalMinute="";
-		String amount="";
-		
-		row = sheet_CDR.getRow(7+numberOfRows);
+
+		currRow += 2;
+
+		int numberOfRows = sheet_Portal.getLastRowNum() - 1;
+		String totalMinute = "";
+		String amount = "";
+
+		row = sheet_CDR.getRow(7 + numberOfRows);
 		cell = row.getCell(5);
-		String rate=cell.getStringCellValue();
-		
-		row = sheet_CDR.getRow(8+numberOfRows);
-		cell = row.getCell(4);
-		totalMinute=cell.getStringCellValue();
-		
-		cell = row.getCell(6);
-		amount=cell.getStringCellValue();
-		
-		int lastRowofLastSOA=sheet_SOA.getLastRowNum()-2;
-		
-		double receivedAmountDouble=0;
-		
-		while(true)
-		{
-			row = sheet_SOA.getRow(lastRowofLastSOA);
-			cell=row.getCell(1);
-			cellValue=cell.getStringCellValue();
-			if(cellValue.equals("Received")|| cellValue.equals("Credit Note"))
-				{
-					HSSFCell receivedAmountCell=row.getCell(4);
-					String receivedAmountCellValue=receivedAmountCell.getStringCellValue();
-					double receivedOnThisDay=Double.parseDouble(receivedAmountCellValue);
-					receivedAmountDouble+=receivedOnThisDay;
-					lastRowofLastSOA--;
+		String rate = cell.getStringCellValue();
+
+		// -----------------------------here is something for split table for stretching
+		// over two months---------------------------------------------
+
+		ArrayList<String> dailyCarrierDuration = new ArrayList<String>();
+		ArrayList<String> dailyRates = new ArrayList<String>();
+		ArrayList<String> dailyAmount = new ArrayList<String>();
+
+		row = sheet_CDR.getRow(8);
+		cell = row.getCell(1);
+		String startMonthYearPortal = cell.getStringCellValue().substring(2);
+
+		for (int portalRow = 1; portalRow < numberOfRows; portalRow++) {
+
+			row = sheet_CDR.getRow(8 + portalRow);
+			cell = row.getCell(1);
+			String currentMonthYearPortal = cell.getStringCellValue().substring(2);
+
+			if (!startMonthYearPortal.equals(currentMonthYearPortal)) {
+				breakPoints.add(portalRow);
+				break;
+			}
+
+		}
+
+		row = sheet_CDR.getRow(8);
+		cell = row.getCell(0);
+
+		for (int portalRowIndex = 0; portalRowIndex < numberOfRows; portalRowIndex++) {
+			row = sheet_CDR.getRow(8 + portalRowIndex);
+
+			cell = row.getCell(4);
+			dailyCarrierDuration.add(cell.getStringCellValue());
+
+			cell = row.getCell(5);
+			dailyRates.add(cell.getStringCellValue());
+
+			cell = row.getCell(5);
+			dailyAmount.add(cell.getStringCellValue());
+		}
+
+		// ---------------------------------------------------------------------------------------------------------------------------------------------
+
+		// -------------------------------------------here is calculation for each
+		// different breakpoints in portal excel-----------------------------
+
+		int sizeofBreakPoints = breakPoints.size();
+		int portalRowForBreakPoint = 0;
+
+		ArrayList<String> breakPointDuartionList = new ArrayList<String>();
+		ArrayList<String> breakPointRatesList = new ArrayList<String>();
+		ArrayList<String> breakPointAmountList = new ArrayList<String>();
+		ArrayList<String> breakPointStartDateList = new ArrayList<String>();
+		ArrayList<String> breakPointEndDateList = new ArrayList<String>();
+
+		if (sizeofBreakPoints > 0) {
+			Iterator<Integer> it = breakPoints.iterator();
+
+			Integer current = 0;
+			while (it.hasNext()) {
+				current = it.next();
+
+				double singleBreakPointDuartion = 0.0;
+				String singleBreakPointRates ="";
+				double singleBreakPointAmount = 0.0;
+				
+				row = sheet_CDR.getRow(8 + portalRowForBreakPoint);
+
+				cell = row.getCell(5);
+				String singleRates = cell.getStringCellValue();
+				singleBreakPointRates = singleRates;
+				
+				cell = row.getCell(1);
+				String startDateSingleBreakPoint = cell.getStringCellValue();
+				
+				row = sheet_CDR.getRow(8 + current - 1);
+				
+				cell = row.getCell(1);
+				String endDateSingleBreakPoint = cell.getStringCellValue();
+
+				for (int portalRow = portalRowForBreakPoint; portalRow < current; portalRow++) {
+
+					row = sheet_CDR.getRow(8 + portalRow);
+
+					cell = row.getCell(4);
+					double singleDuration =convertCommaandBrackettoNumber(cell.getStringCellValue());
+					singleBreakPointDuartion += singleDuration;
+
+					cell = row.getCell(6);
+					double singleAmount = cell.getNumericCellValue();
+					singleBreakPointAmount += singleAmount;
+					portalRowForBreakPoint=current;
 				}
-			else break;
+				
+				breakPointDuartionList.add(convertNumbertoCommaBracket(singleBreakPointDuartion));
+				breakPointRatesList.add(singleBreakPointRates);
+				breakPointAmountList.add(convertNumbertoCommaBracket(singleBreakPointAmount));
+				breakPointStartDateList.add(startDateSingleBreakPoint);
+				breakPointEndDateList.add(endDateSingleBreakPoint);
+
+			}
+			
+			double singleBreakPointDuartion = 0.0;
+			String singleBreakPointRates="" ;
+			double singleBreakPointAmount = 0.0;
+			
+			row = sheet_CDR.getRow(8 + portalRowForBreakPoint);
+
+			cell = row.getCell(5);
+			String singleRates = cell.getStringCellValue();
+			singleBreakPointRates = singleRates;
+			
+			cell = row.getCell(1);
+			String startDateSingleBreakPoint = cell.getStringCellValue();
+			
+			row = sheet_CDR.getRow(8 + numberOfRows - 1);
+			
+			cell = row.getCell(1);
+			String endDateSingleBreakPoint = cell.getStringCellValue();
+
+			for (int portalRow = portalRowForBreakPoint; portalRow < numberOfRows; portalRow++) {
+
+				row = sheet_CDR.getRow(8 + portalRow);
+
+				cell = row.getCell(4);
+				double singleDuration =convertCommaandBrackettoNumber(cell.getStringCellValue());
+				singleBreakPointDuartion += singleDuration;
+
+				cell = row.getCell(6);
+				double singleAmount = cell.getNumericCellValue();
+				singleBreakPointAmount += singleAmount;
+				portalRowForBreakPoint=current;
+			}
+			
+			breakPointDuartionList.add(convertNumbertoCommaBracket(singleBreakPointDuartion));
+			breakPointRatesList.add(singleBreakPointRates);
+			breakPointAmountList.add(convertNumbertoCommaBracket(singleBreakPointAmount));
+			breakPointStartDateList.add(startDateSingleBreakPoint);
+			breakPointEndDateList.add(endDateSingleBreakPoint);
+			
+		}
+
+		// -------------------------------------------------------------------------------------------------------------------------------------------------
+
+		row = sheet_CDR.getRow(8 + numberOfRows);
+		cell = row.getCell(4);
+		totalMinute = cell.getStringCellValue();
+
+		cell = row.getCell(6);
+		amount = cell.getStringCellValue();
+
+		int lastRowofLastSOA = sheet_SOA.getLastRowNum() - 2;
+
+		double receivedAmountDouble = 0;
+
+		while (true) {
+			row = sheet_SOA.getRow(lastRowofLastSOA);
+			cell = row.getCell(1);
+			cellValue = cell.getStringCellValue();
+			if (cellValue.equals("Received") || cellValue.equals("Credit Note")) {
+				HSSFCell receivedAmountCell = row.getCell(4);
+				String receivedAmountCellValue = receivedAmountCell.getStringCellValue();
+				double receivedOnThisDay = Double.parseDouble(receivedAmountCellValue);
+				receivedAmountDouble += receivedOnThisDay;
+				lastRowofLastSOA--;
+			} else
+				break;
 		}
 		row = sheet_SOA.getRow(lastRowofLastSOA);
 		cell = row.getCell(5);
-		String lastTotalAmount=cell.getStringCellValue();
-		String receivedAmount=convertNumbertoCommaBracket(receivedAmountDouble);
+		String lastTotalAmount = cell.getStringCellValue();
+		String receivedAmount = convertNumbertoCommaBracket(receivedAmountDouble);
 		String netDueBalance;
 		String totalBalance;
-		
-		double lastTotalAmountDouble=convertCommaandBrackettoNumber(lastTotalAmount);		
-		double currentWeekAmount=convertCommaandBrackettoNumber(amount);		
-		double totalBalanceDouble=lastTotalAmountDouble+currentWeekAmount;		
-		double netDueBalanceDouble=totalBalanceDouble-receivedAmountDouble;
-		
-		totalBalance=convertNumbertoCommaBracket(totalBalanceDouble);
-		receivedAmount=convertNumbertoCommaBracket(receivedAmountDouble);
-		netDueBalance=convertNumbertoCommaBracket(netDueBalanceDouble);
-		
-		String moneyAsWords="";
-		if(netDueBalanceDouble>=0.0)
-		{
-			long netDueBalanceLong=(long)netDueBalanceDouble;
-			double afterDecimalPoint=netDueBalanceDouble-netDueBalanceLong;
-			afterDecimalPoint=(Math.round(afterDecimalPoint*100.0))/100.0;
-			long afterDecimalPointLong=(long)(afterDecimalPoint*100.0);
-			
-			OnlyForMoneyAsWords o=new OnlyForMoneyAsWords();			
-			moneyAsWords="USD "+o.convert(netDueBalanceLong)+" and "+o.convert(afterDecimalPointLong)+" Cents Only";
-		}
-		else
-		{
-			long netDueBalanceLong=(long)(netDueBalanceDouble*(-1.0));	
-			double afterDecimalPoint=netDueBalanceDouble+netDueBalanceLong;
-			afterDecimalPoint*=-1.0;
-			afterDecimalPoint=(Math.round(afterDecimalPoint*100.0))/100.0;
-			long afterDecimalPointLong=(long)(afterDecimalPoint*100.0);
-			
-			OnlyForMoneyAsWords o=new OnlyForMoneyAsWords();			
-			moneyAsWords="(USD "+o.convert(netDueBalanceLong)+" and "+o.convert(afterDecimalPointLong)+" Cents Only)";
-		}
-		
-		
-//		if(netDueBalanceDouble<99000) moneyAsWords = getMoneyIntoWords(netDueBalanceDouble);
 
-		//-----------------------here starts the table-----------------------------------------------------
-		
-		setCellStyle(sheet,currRow,currRow,0,3,wb,1,true, 8);
+		double lastTotalAmountDouble = convertCommaandBrackettoNumber(lastTotalAmount);
+		double currentWeekAmount = convertCommaandBrackettoNumber(amount);
+		double totalBalanceDouble = lastTotalAmountDouble + currentWeekAmount;
+		double netDueBalanceDouble = totalBalanceDouble - receivedAmountDouble;
+
+		totalBalance = convertNumbertoCommaBracket(totalBalanceDouble);
+		receivedAmount = convertNumbertoCommaBracket(receivedAmountDouble);
+		netDueBalance = convertNumbertoCommaBracket(netDueBalanceDouble);
+
+		String moneyAsWords = "";
+		if (netDueBalanceDouble >= 0.0) {
+			long netDueBalanceLong = (long) netDueBalanceDouble;
+			double afterDecimalPoint = netDueBalanceDouble - netDueBalanceLong;
+			afterDecimalPoint = (Math.round(afterDecimalPoint * 100.0)) / 100.0;
+			long afterDecimalPointLong = (long) (afterDecimalPoint * 100.0);
+
+			OnlyForMoneyAsWords o = new OnlyForMoneyAsWords();
+			moneyAsWords = "USD " + o.convert(netDueBalanceLong) + " and " + o.convert(afterDecimalPointLong)
+					+ " Cents Only";
+		} else {
+			long netDueBalanceLong = (long) (netDueBalanceDouble * (-1.0));
+			double afterDecimalPoint = netDueBalanceDouble + netDueBalanceLong;
+			afterDecimalPoint *= -1.0;
+			afterDecimalPoint = (Math.round(afterDecimalPoint * 100.0)) / 100.0;
+			long afterDecimalPointLong = (long) (afterDecimalPoint * 100.0);
+
+			OnlyForMoneyAsWords o = new OnlyForMoneyAsWords();
+			moneyAsWords = "(USD " + o.convert(netDueBalanceLong) + " and " + o.convert(afterDecimalPointLong)
+					+ " Cents Only)";
+		}
+
+		// if(netDueBalanceDouble<99000) moneyAsWords =
+		// getMoneyIntoWords(netDueBalanceDouble);
+
+		// -----------------------here starts the
+		// table-----------------------------------------------------
+
+		setCellStyle(sheet, currRow, currRow, 0, 3, wb, 1, true, 8);
 		row = sheet.getRow(currRow);
 		cell = row.getCell(0);
 		cell.setCellValue("Services");
-		
-		setCellStyle(sheet,currRow,currRow,4,4,wb,1,true, 8);
+
+		setCellStyle(sheet, currRow, currRow, 4, 4, wb, 1, true, 8);
 		cell = row.getCell(4);
 		cell.setCellValue("Si. No.");
-		
-		setCellStyle(sheet,currRow,currRow,5,7,wb,1,true, 8);
+
+		setCellStyle(sheet, currRow, currRow, 5, 7, wb, 1, true, 8);
 		cell = row.getCell(5);
 		cell.setCellValue("Period");
-		
-		setCellStyle(sheet,currRow,currRow,8,9,wb,1,true, 8);
+
+		setCellStyle(sheet, currRow, currRow, 8, 9, wb, 1, true, 8);
 		cell = row.getCell(8);
 		cell.setCellValue("Paid Minutes");
-		
-		setCellStyle(sheet,currRow,currRow,10,10,wb,1,true, 8);
+
+		setCellStyle(sheet, currRow, currRow, 10, 10, wb, 1, true, 8);
 		cell = row.getCell(10);
 		cell.setCellValue("Rate/min  (USD)");
-		
-		setCellStyle(sheet,currRow,currRow,11,12,wb,1,true, 8);
+
+		setCellStyle(sheet, currRow, currRow, 11, 12, wb, 1, true, 8);
 		cell = row.getCell(11);
 		cell.setCellValue("Total Amount(USD)");
 		currRow++;
+
+		int rowIndex = 0;
 		
-		int rowIndex=0;
+		int totalRowInTable=breakPointDuartionList.size();
+	
+
+		// ------------------------------------ single
+		// row---------------------------------------------
+
 		
-		setCellStyle(sheet,currRow,currRow+1, 0, 3,wb,1,false, 10);
-		row = sheet.getRow(currRow);
-		cell = row.getCell(0);
-		cell.setCellValue("Intl. Incoming calls towards Bangladesh");
+		for(rowIndex=0;rowIndex<totalRowInTable;rowIndex++)
+		{
+			setCellStyle(sheet, currRow+rowIndex*2, currRow+rowIndex*2 + 1, 0, 3, wb, 1, false, 10);
+			row = sheet.getRow(currRow+rowIndex*2);
+			cell = row.getCell(0);
+			cell.setCellValue("Intl. Incoming calls towards Bangladesh");
+
+			setCellStyle(sheet, currRow+rowIndex*2, currRow+rowIndex*2 + 1, 4, 4, wb, 1, false, 10);
+			cell = row.getCell(4);
+			cell.setCellValue(String.valueOf(rowIndex + 1));
+
+			setCellStyle(sheet, currRow+rowIndex*2, currRow+rowIndex*2 + 1, 5, 7, wb, 1, false, 10);
+			cell = row.getCell(5);
+			cell.setCellValue(breakPointStartDateList.get(rowIndex) + " to " + breakPointEndDateList.get(rowIndex));
+
+			setCellStyle(sheet, currRow+rowIndex*2, currRow+rowIndex*2 + 1, 8, 9, wb, 1, false, 10);
+			cell = row.getCell(8);
+			cell.setCellValue(breakPointDuartionList.get(rowIndex));
+
+			setCellStyle(sheet, currRow+rowIndex*2, currRow+rowIndex*2 + 1, 10, 10, wb, 1, false, 10);
+			cell = row.getCell(10);
+			cell.setCellValue(breakPointRatesList.get(rowIndex));
+
+			setCellStyle(sheet, currRow+rowIndex*2, currRow+rowIndex*2 + 1, 11, 12, wb, 1, false, 10);
+			cell = row.getCell(11);
+			cell.setCellValue(breakPointAmountList.get(rowIndex));
+			
+		}
 		
-		setCellStyle(sheet,currRow,currRow+1, 4, 4,wb,1,false, 10);
-		cell = row.getCell(4);
-		cell.setCellValue("1");
-		
-		setCellStyle(sheet,currRow,currRow+1, 5, 7,wb,1,false, 10);
-		cell = row.getCell(5);
-		cell.setCellValue(startDateFinalString+"-"+endDateFinalString);
-		
-		setCellStyle(sheet,currRow,currRow+1,8,9,wb,1,false, 10);
-		cell = row.getCell(8);
-		cell.setCellValue(totalMinute);	
-		
-		setCellStyle(sheet,currRow,currRow+1,10,10,wb,1,false, 10);
-		cell = row.getCell(10);
-		cell.setCellValue(rate);
-		
-		setCellStyle(sheet,currRow,currRow+1,11,12,wb,1,false, 10);
-		cell = row.getCell(11);
-		cell.setCellValue(amount);
-		
-		rowIndex++;
-		
-		setCellStyle(sheet,currRow+rowIndex*2,currRow+rowIndex*2,10,10,wb,1,true, 10);
-		row = sheet.getRow(currRow+rowIndex*2);
+
+		// ------------------------------------------------------------------------------------------------
+
+		//currRow++;
+
+		setCellStyle(sheet, currRow + rowIndex * 2, currRow + rowIndex * 2, 10, 10, wb, 1, true, 10);
+		row = sheet.getRow(currRow + rowIndex * 2);
 		cell = row.getCell(10);
 		cell.setCellValue("Total");
-		
-		setCellStyle(sheet,currRow+rowIndex*2,currRow+rowIndex*2,11,12,wb,1,true, 10);
-		row = sheet.getRow(currRow+rowIndex*2);
+
+		setCellStyle(sheet, currRow + rowIndex * 2, currRow + rowIndex * 2, 11, 12, wb, 1, true, 10);
+		row = sheet.getRow(currRow + rowIndex * 2);
 		cell = row.getCell(11);
 		cell.setCellValue(amount);
 		currRow++;
-		
-		//----------------------------------table ends--------------------------------------------------
-		
-		int currentRowIndex=currRow+1+rowIndex*2;
-		
-		for(int p=currentRowIndex;p<currentRowIndex+7;p++)
-		{
+
+		// ----------------------------------table
+		// ends--------------------------------------------------
+
+		int currentRowIndex = currRow + 1 + rowIndex * 2;
+
+		for (int p = currentRowIndex; p < currentRowIndex + 7; p++) {
 			row = sheet.getRow(p);
 			row.setHeight((short) 500);
 		}
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,0,3,wb,2,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 0, 3, wb, 2, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(0);
 		cell.setCellValue("Account Summary :");
 		currentRowIndex++;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,0,3,wb,2,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 0, 3, wb, 2, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(0);
 		cell.setCellValue("Balance:");
-		
-		setCellStyleRight(sheet,currentRowIndex,currentRowIndex,4,9,wb,2,true, 10);
+
+		setCellStyleRight(sheet, currentRowIndex, currentRowIndex, 4, 9, wb, 2, true, 10);
 		cell = row.getCell(4);
 		cell.setCellValue("Total USD :");
 		currentRowIndex++;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,0,3,wb,2,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 0, 3, wb, 2, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(0);
 		cell.setCellValue("Current Invoice Amount :");
-		
-		setCellStyleRight(sheet,currentRowIndex,currentRowIndex,4,9,wb,2,true, 10);
+
+		setCellStyleRight(sheet, currentRowIndex, currentRowIndex, 4, 9, wb, 2, true, 10);
 		cell = row.getCell(4);
 		cell.setCellValue(amount);
 		currentRowIndex++;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,0,3,wb,2,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 0, 3, wb, 2, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(0);
 		cell.setCellValue("Previous Balance :");
-		
-		setCellStyleRight(sheet,currentRowIndex,currentRowIndex,4,9,wb,2,true, 10);
+
+		setCellStyleRight(sheet, currentRowIndex, currentRowIndex, 4, 9, wb, 2, true, 10);
 		cell = row.getCell(4);
 		cell.setCellValue(lastTotalAmount);
 		currentRowIndex++;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,0,3,wb,2,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 0, 3, wb, 2, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(0);
 		cell.setCellValue("Total Balance :");
-		
-		setCellStyleRight(sheet,currentRowIndex,currentRowIndex,4,9,wb,2,true, 10);
+
+		setCellStyleRight(sheet, currentRowIndex, currentRowIndex, 4, 9, wb, 2, true, 10);
 		cell = row.getCell(4);
 		cell.setCellValue(totalBalance);
 		currentRowIndex++;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,0,3,wb,2,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 0, 3, wb, 2, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(0);
 		cell.setCellValue("Total Adjustment :");
-		
-		setCellStyleRight(sheet,currentRowIndex,currentRowIndex,4,9,wb,2,true, 10);
+
+		setCellStyleRight(sheet, currentRowIndex, currentRowIndex, 4, 9, wb, 2, true, 10);
 		cell = row.getCell(4);
 		cell.setCellValue(receivedAmount);
 		currentRowIndex++;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,0,3,wb,2,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 0, 3, wb, 2, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(0);
 		cell.setCellValue("Net Due Balance :");
-		
-		setCellStyleRight(sheet,currentRowIndex,currentRowIndex,4,9,wb,2,true, 10);
+
+		setCellStyleRight(sheet, currentRowIndex, currentRowIndex, 4, 9, wb, 2, true, 10);
 		cell = row.getCell(4);
 		cell.setCellValue(netDueBalance);
 		currentRowIndex++;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex+1,0,9,wb,2,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex + 1, 0, 9, wb, 2, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(0);
-		cell.setCellValue("Amount in words: "+moneyAsWords);
-		currentRowIndex+=3;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,0,0,wb,2,true, 12);
+		cell.setCellValue("Amount in words: " + moneyAsWords);
+		currentRowIndex += 3;
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 0, 0, wb, 2, true, 12);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(0);
 		cell.setCellValue("Notes:");
-		currentRowIndex+=1;
-		
-		setCellStyleLeft(sheet,currentRowIndex,currentRowIndex,1,6,wb,0,false, 10);
+		currentRowIndex += 1;
+
+		setCellStyleLeft(sheet, currentRowIndex, currentRowIndex, 1, 6, wb, 0, false, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(1);
 		cell.setCellValue("1. Please pay in favor of “Platinum Communications Ltd.");
 		currentRowIndex++;
-		
-		setCellStyleLeft(sheet,currentRowIndex,currentRowIndex,1,3,wb,0,true, 10);
+
+		setCellStyleLeft(sheet, currentRowIndex, currentRowIndex, 1, 3, wb, 0, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(1);
 		cell.setCellValue("2. Bank Details:");
-		
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,4,12,wb,0,false, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 4, 12, wb, 0, false, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(4);
 		cell.setCellValue("a) Bank Name: Prime Bank Ltd., Branch: - Mohakhali, A/C No: - 11051180027298");
 		currentRowIndex++;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex,4,12,wb,0,false, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex, 4, 12, wb, 0, false, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(4);
 		cell.setCellValue("b) Bank Name: Brac Bank Ltd.., Branch: - Gulshan, A/C No: - 1501202600679001");
-		currentRowIndex+=17;
-		
-		setCellStyleForSignature(sheet,currentRowIndex,currentRowIndex,1,4,wb,3,true, 10);
+		currentRowIndex += 17;
+
+		setCellStyleForSignature(sheet, currentRowIndex, currentRowIndex, 1, 4, wb, 3, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(1);
 		cell.setCellValue("");
-		
-		setCellStyleForSignature(sheet,currentRowIndex,currentRowIndex,8,11,wb,3,true, 10);
+
+		setCellStyleForSignature(sheet, currentRowIndex, currentRowIndex, 8, 11, wb, 3, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(8);
 		cell.setCellValue("");
 		currentRowIndex++;
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex+1,1,3,wb,0,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex + 1, 1, 3, wb, 0, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(1);
 		cell.setCellValue("Head of Department              Billing & Rev.Assurance");
-		
-		setCellStyle(sheet,currentRowIndex,currentRowIndex+1,8,10,wb,0,true, 10);
+
+		setCellStyle(sheet, currentRowIndex, currentRowIndex + 1, 8, 10, wb, 0, true, 10);
 		row = sheet.getRow(currentRowIndex);
 		cell = row.getCell(8);
 		cell.setCellValue("Head of Department              Finance & Accounts");
-		
-		
-		int lastRow=62;
-		setCellStyle(sheet,lastRow,lastRow+2,0,12,wb,0,false, 9);
+
+		int lastRow = 62;
+		setCellStyle(sheet, lastRow, lastRow + 2, 0, 12, wb, 0, false, 9);
 		row = sheet.getRow(lastRow);
 		cell = row.getCell(0);
-		cell.setCellValue("Corporate Office: 82 Mohakhali C/A (2nd Floor), Dhaka - 1212, Bangladesh, Tel: +88 02 9853459, 9853473, Fax: +88 02 8814537\r\n" + 
-				"E-mail: infoplatinumgw.com, Web: www.platinumgw.com\r\n" + 
-				"");
-	
+		cell.setCellValue(
+				"Corporate Office: 82 Mohakhali C/A (2nd Floor), Dhaka - 1212, Bangladesh, Tel: +88 02 9853459, 9853473, Fax: +88 02 8814537\r\n"
+						+ "E-mail: infoplatinumgw.com, Web: www.platinumgw.com\r\n" + "");
+
 		sheet.setFitToPage(true);
-		
+
 		wb.write(outStream);
 
 	}
-	
+
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
-		
 
-		
-		String[] carrierList={"Ivoco", "Carrier-1",  "INS","SaifTelecom"};
-		int numberOfCarrier=carrierList.length;
-		
-		for(int i=0;i<numberOfCarrier;i++) {
-			
-			carrierName=carrierList[i];
+		 String[] carrierList={"Ivoco", "Carrier-1", "INS","SaifTelecom"};
+//		String[] carrierList = { "SaifTelecom" };
+		int numberOfCarrier = carrierList.length;
+
+		for (int i = 0; i < numberOfCarrier; i++) {
+
+			carrierName = carrierList[i];
 			System.out.println(carrierName);
-			discountIvoco=0;
-			
-			
+			discountIvoco = 0;
+
 			try {
 				GenerateDoc.setDate();
-				
+				GenerateDoc.storeBreakPoints();
 				GenerateDoc.setInOutLastDate();
-				
+
 				GenerateDoc.readXLSXFile();
 			} catch (Exception e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			
-			
+
 			try {
 				outStream.flush();
 				outStream.close();
@@ -846,6 +1065,5 @@ public static void setInOutLastDate() throws IOException{
 		}
 
 	}
-
 
 }
