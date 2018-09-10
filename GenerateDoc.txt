@@ -734,6 +734,47 @@ public class GenerateDoc {
 			breakPointEndDateList.add(endDateSingleBreakPoint);
 			
 		}
+		
+		else
+		{
+			double singleBreakPointDuartion = 0.0;
+			String singleBreakPointRates="" ;
+			double singleBreakPointAmount = 0.0;
+			
+			row = sheet_CDR.getRow(8);
+
+			cell = row.getCell(5);
+			String singleRates = cell.getStringCellValue();
+			singleBreakPointRates = singleRates;
+			
+			cell = row.getCell(1);
+			String startDateSingleBreakPoint = cell.getStringCellValue();
+			
+			row = sheet_CDR.getRow(8 + numberOfRows - 1);
+			
+			cell = row.getCell(1);
+			String endDateSingleBreakPoint = cell.getStringCellValue();
+
+			for (int portalRow = 0; portalRow < numberOfRows; portalRow++) {
+
+				row = sheet_CDR.getRow(8 + portalRow);
+
+				cell = row.getCell(4);
+				double singleDuration =convertCommaandBrackettoNumber(cell.getStringCellValue());
+				singleBreakPointDuartion += singleDuration;
+
+				cell = row.getCell(6);
+				double singleAmount = cell.getNumericCellValue();
+				singleBreakPointAmount += singleAmount;
+			}
+			
+			breakPointDuartionList.add(convertNumbertoCommaBracket(singleBreakPointDuartion));
+			breakPointRatesList.add(singleBreakPointRates);
+			breakPointAmountList.add(convertNumbertoCommaBracket(singleBreakPointAmount));
+			breakPointStartDateList.add(startDateSingleBreakPoint);
+			breakPointEndDateList.add(endDateSingleBreakPoint);
+			
+		}
 
 		// -------------------------------------------------------------------------------------------------------------------------------------------------
 
